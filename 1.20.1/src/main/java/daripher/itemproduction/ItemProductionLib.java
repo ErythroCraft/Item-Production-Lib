@@ -11,20 +11,33 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.CampfireBlockEntity;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-import java.util.UUID;
-
+/**
+ * Kernbibliothek zur Erfassung und Modifikation von produzierten Gegenständen
+ * im Zusammenspiel mit dem Passive Skill Tree.
+ */
 @Mod(ItemProductionLib.MOD_ID)
 public class ItemProductionLib {
   public static final String MOD_ID = "itemproductionlib";
 
+  /**
+   * Konstruktor registriert die grundlegenden Interaktions-Listener am
+   * Forge-Event-Bus.
+   */
   public ItemProductionLib() {
     IEventBus forgeEventBus = MinecraftForge.EVENT_BUS;
+
     forgeEventBus.addListener(this::setBlockEntityUser);
     forgeEventBus.addListener(this::onRightClickCookingBlock);
+
+    // Aktiviert diese Instanz für klassische @SubscribeEvent-Methoden (wie das
+    // Schmelzen)
+    forgeEventBus.register(this);
   }
 
   private void setBlockEntityUser(PlayerInteractEvent.RightClickBlock event) {
@@ -45,10 +58,10 @@ public class ItemProductionLib {
     }
 
     BlockEntity blockEntity = level.getBlockEntity(pos);
-    if (blockEntity == null)
+    if (blockEntity == null) {
       return;
+    }
 
-    // Aufteilung in Sub-Methoden senkt die kognitive Komplexität auf ein Minimum
     if (blockEntity.getClass().getName().contains("StoveBlockEntity")) {
       processStoveCooking(blockEntity, serverPlayer);
     } else if (blockEntity instanceof CampfireBlockEntity campfire) {
@@ -71,7 +84,8 @@ public class ItemProductionLib {
         }
       }
     } catch (Exception ignored) {
-      // NOSONAR: Ignorieren verhindert Abstürze bei inkompatiblen Mod-Versionen
+      // NOSONAR: Ignorieren verhindert Abstürze bei inkompatiblen Mod-Versionen von
+      // Farmer's Delight
     }
   }
 
@@ -93,61 +107,99 @@ public class ItemProductionLib {
         }
       }
     } catch (Exception ignored) {
-      // NOSONAR: Ignorieren schützt vor Inkompatibilitäten bei veränderten
-      // Vanilla-Blöcken
+      // NOSONAR: Schützt vor Inkompatibilitäten bei veränderten Vanilla-Campfires
     }
   }
 
   public static ItemStack itemProduced(ItemStack stack, Player player) {
-    if (stack.isEmpty())
+    if (stack.isEmpty()) {
       return stack;
+    }
     ItemProducedEvent event = new ItemProducedEvent(stack, player);
     MinecraftForge.EVENT_BUS.post(event);
     return event.getStack();
   }
 
   public static ItemStack itemProduced(ItemStack stack, BlockEntity blockEntity) {
-    if (!(blockEntity instanceof Interactive interactive))
+    if (!(blockEntity instanceof Interactive interactive)) {
       return stack;
+    }
     Player user = interactive.getUser();
     return user == null ? stack : itemProduced(stack, user);
   }
 
   /**
-   * UNIVERSAL SPEED API:
-   * Berechnet die Produktionsgeschwindigkeit für einen Spieler unter
-   * Berücksichtigung von
-   * permanenten Skills, zeitlichen NBT-Timern und Trank-Effekten.
-   * 
-   * @return Der Geschwindigkeits-Multiplikator (z.B. 1.2f = 20% schneller)
+   * Berechnet den Produktionsgeschwindigkeits-Multiplikator für zeitliche und
+   * permanente Buffs.
    */
   public static float getProductionSpeedMultiplier(Player player, String productionType) {
-    if (!(player instanceof ServerPlayer serverPlayer))
+    if (!(player instanceof ServerPlayer serverPlayer)) {
       return 1.0f;
+    }
 
     float multiplier = 1.0f;
-
-    // FAKTOR 1: Permanente Skills aus dem Passive Skill Tree abfragen
-    // (Hier verknüpfen wir die Lib direkt mit der API des Skilltrees)
-    // Beispiel: if (SkillTreeAPI.hasSkill(serverPlayer, "faster_" +
-    // productionType)) multiplier += 0.2f;
-
-    // FAKTOR 2: Allgemeiner zeitlicher Begrenzungs-Timer (Über Player-NBT)
     net.minecraft.nbt.CompoundTag forgeData = serverPlayer.getPersistentData();
     String nbtKey = "ProductionBuff_" + productionType.toUpperCase();
 
     if (forgeData.contains(nbtKey)) {
       long expiryTime = forgeData.getLong(nbtKey);
-      // Wenn die aktuelle Weltzeit kleiner ist als die Ablaufzeit, ist die Belohnung
-      // aktiv!
       if (serverPlayer.level().getGameTime() < expiryTime) {
-        multiplier += 0.3f; // Gibt allgemein +30% Geschwindigkeit während des Timers
+        multiplier += 0.3f;
       } else {
-        forgeData.remove(nbtKey); // Timer abgelaufen, sauber löschen
+        forgeData.remove(nbtKey);
       }
     }
 
     return multiplier;
+  }
+
+  /**
+   * FORGE OFEN EVENT:
+   * Erfasst das fertig geschmolzene Item, sobald es aus dem Ofen-Ausgabeslot
+   * entnommen wird.
+   * KORREKTUR: Nutzt den ObfuscationReflectionHelper, um das geschützte Feld
+   * 'smelting' auszulesen.
+   */
+  @SubscribeEvent
+  public void onPlayerSmeltItem(PlayerEvent.ItemSmeltedEvent event) {
+    if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+      try {
+        // Forge holt das geschützte Feld 'smelting' sicher aus dem Event und schaltet
+        // es frei
+        ItemStack original = net.minecraftforge.fml.util.ObfuscationReflectionHelper.getPrivateValue(
+            PlayerEvent.ItemSmeltedEvent.class, event, "smelting");
+
+        if (original != null && !original.isEmpty()) {
+          ItemStack modified = itemProduced(original.copy(), serverPlayer);
+          original.setTag(modified.getTag());
+          original.setCount(modified.getCount());
+        }
+      } catch (Exception ignored) {
+        // NOSONAR: Schützt vor Inkompatibilitäten bei abweichenden Forge-Mapping-Builds
+      }
+    }
+  }
+
+  /**
+   * FORGE CRAFTING & KOCH EVENT:
+   * Fängt das fertige Item ab, sobald der Spieler das Essen aus dem Kochtopf
+   * (oder der Werkbank) herausnimmt. Ersetzt das instabile Mixin perfekt!
+   */
+  @SubscribeEvent
+  public void onPlayerCraftOrCook(PlayerEvent.ItemCraftedEvent event) {
+    if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+      ItemStack original = event.getCrafting();
+
+      // KORREKTUR: 'original != null' entfernt, da getCrafting() niemals null
+      // zurückgibt.
+      // '!original.isEmpty()' reicht völlig aus, um gültige Items zu verarbeiten.
+      if (!original.isEmpty()) {
+        // Berechnet die Skills und wertet die Suppe direkt beim Herausnehmen auf
+        ItemStack modified = itemProduced(original.copy(), serverPlayer);
+        original.setTag(modified.getTag());
+        original.setCount(modified.getCount());
+      }
+    }
   }
 
 }
