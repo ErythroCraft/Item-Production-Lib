@@ -8,16 +8,20 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '5.1.+', changing: true
-        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+        // Upgrade auf ForgeGradle 6.0.+ für Kompatibilität mit Gradle 8+ und Java 21 Toolchains
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '6.0.24', changing: true
+        // Upgrade auf eine stabile Version von MixinGradle
+        classpath 'org.spongepowered:mixingradle:0.7.38'
     }
 }
 
 plugins {
     id 'eclipse'
     id 'maven-publish'
-    id 'net.minecraftforge.gradle' version '5.1.+'
+    id("net.minecraftforge.gradle") version "7.0.29"
     id 'org.parchmentmc.librarian.forgegradle' version '1.+'
+    // Offizielle Einbindung des Mixin-Plugins im modernen Gradle-Stil
+    id 'org.spongepowered.mixin' version '0.7.38'
 }
 
 apply plugin: 'org.spongepowered.mixin'
@@ -26,10 +30,13 @@ version = mod_version
 group = mod_group_id
 archivesBaseName = mod_file_name
 
+// DEFINITION DER TOOLCHAIN: 
+// Erlaubt es dir, Gradle mit Java 21 auszuführen, kompiliert den Code im Mod aber strikt 
+// nach Java 17-Standard herunter, damit die .jar in Minecraft 1.20.1 lauffähig ist.
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 mixin {
-    add sourceSets.main, "${mod_id}.refmap.json"
+    add sourceSets.main, "itemproduction.refmap.json"
     config "${mod_id}.mixins.json"
 }
 
@@ -39,59 +46,34 @@ minecraft {
     runs {
         client {
             workingDirectory project.file('run')
-
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
             property 'forge.enabledGameTestNamespaces', mod_id
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
+            mods { "${mod_id}" { source sourceSets.main } }
         }
 
         server {
             workingDirectory project.file('run')
-
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
             property 'forge.enabledGameTestNamespaces', mod_id
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
+            mods { "${mod_id}" { source sourceSets.main } }
         }
 
         gameTestServer {
             workingDirectory project.file('run')
-
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
             property 'forge.enabledGameTestNamespaces', mod_id
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
+            mods { "${mod_id}" { source sourceSets.main } }
         }
 
         data {
             workingDirectory project.file('run')
-
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-
             args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
+            mods { "${mod_id}" { source sourceSets.main } }
         }
     }
 }
@@ -99,36 +81,31 @@ minecraft {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
-	maven {
-        url = "https://maven.theillusivec4.top/"
-    }
+	maven { url = "https://maven.theillusivec4.top/" }
 	maven {
         url "https://www.cursemaven.com"
-        content {
-            includeGroup "curse.maven"
-        }
+        content { includeGroup "curse.maven" }
     }
 }
 
 dependencies {
 	minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-    // mixin
-	annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    
+    // Modernisierte Konfiguration für den AnnotationProcessor in Gradle 8
+	annotationProcessor group: 'org.spongepowered', name: 'mixin', version: '0.8.5', classifier: 'processor'
+    
     implementation(annotationProcessor("io.github.llamalad7:mixinextras-common:0.2.1"))
     implementation(jarJar("io.github.llamalad7:mixinextras-forge:0.2.1")) {
         jarJar.ranged(it, "[0.2.1,)")
     }
-    // farmer's delight
+    
+    // Mod-Abhängigkeiten
     implementation fg.deobf("curse.maven:farmers-delight-398521:4679319")
-    // jei
     implementation fg.deobf("curse.maven:jei-238222:4644453")
-    // tetra
     implementation fg.deobf("curse.maven:tetra-289712:4857842")
     implementation fg.deobf("curse.maven:mutil-351914:4824501")
-    // dave's potioneering
     implementation fg.deobf("curse.maven:daves-potioneering-639653:5049324")
     implementation fg.deobf("curse.maven:geckolib-388172:4933987")
-    // visual workbench
     implementation fg.deobf("curse.maven:visual-workbench-500273:4612695")
     implementation fg.deobf("curse.maven:puzzles-lib-495476:5074812")
 }
@@ -145,10 +122,7 @@ def replaceProperties = [
 processResources {
     inputs.properties replaceProperties
     replaceProperties.put 'project', project
-
-    filesMatching(resourceTargets) {
-        expand replaceProperties
-    }
+    filesMatching(resourceTargets) { expand replaceProperties }
 }
 
 jar {
@@ -160,8 +134,13 @@ jar {
                 "Implementation-Title"    : project.name,
                 "Implementation-Version"  : project.jar.archiveVersion,
                 "Implementation-Vendor"   : mod_authors,
-                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                "MixinConfigs"            : "${mod_id}.mixins.json"
         ])
+    }
+    // Zwingt Gradle dazu, die zur Compile-Zeit generierte Refmap automatisch in die JAR zu packen
+    from("${project.buildDir}/tmp/compileJava") {
+        include "itemproduction.refmap.json"
     }
 }
 
@@ -169,4 +148,10 @@ jar.finalizedBy('reobfJar')
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // Aktiviert den AnnotationProcessor Pfad für das korrekte Schreiben der Refmaps
+    options.annotationProcessorPath = files(configurations.annotationProcessor)
+    options.compilerArgs.addAll([
+        "-AoutRefMapFile=${project.buildDir}/tmp/compileJava/itemproduction.refmap.json",
+        "-AdefaultObfuscationEnv=searge"
+    ])
 }
