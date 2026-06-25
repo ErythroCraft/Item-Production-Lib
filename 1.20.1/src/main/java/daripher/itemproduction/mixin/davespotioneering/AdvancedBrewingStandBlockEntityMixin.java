@@ -18,18 +18,22 @@ public abstract class AdvancedBrewingStandBlockEntityMixin {
     @SuppressWarnings("DataFlowIssue")
     AdvancedBrewingStandBlockEntity blockEntity = (AdvancedBrewingStandBlockEntity) (Object) this;
 
-    blockEntity.getCapability(ForgeCapabilities.ITEM_HANDLER).ifPresent(handler -> {
-      for (int slot = 0; slot < 3; slot++) {
-        ItemStack stack = handler.getStackInSlot(slot);
+    // KORREKTUR: Modifikation nur auf dem Server durchführen, um Geister-Tränke zu
+    // verhindern
+    if (blockEntity.getLevel() != null && !blockEntity.getLevel().isClientSide()) {
+      blockEntity.getCapability(ForgeCapabilities.ITEM_HANDLER).ifPresent(handler -> {
+        for (int slot = 0; slot < 3; slot++) {
+          ItemStack stack = handler.getStackInSlot(slot);
 
-        if (!stack.isEmpty()) {
-          ItemStack modified = ItemProductionLib.itemProduced(stack, blockEntity);
+          if (!stack.isEmpty()) {
+            ItemStack modified = ItemProductionLib.itemProduced(stack, blockEntity);
 
-          if (handler instanceof ItemStackHandler itemStackHandler) {
-            itemStackHandler.setStackInSlot(slot, modified);
+            if (handler instanceof ItemStackHandler itemStackHandler) {
+              itemStackHandler.setStackInSlot(slot, modified);
+            }
           }
         }
-      }
-    });
+      });
+    }
   }
 }

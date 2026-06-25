@@ -1,5 +1,5 @@
 {
-  "required": true,
+  "required": false,
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_17",
   "package": "daripher.itemproduction.mixin",
@@ -10,9 +10,12 @@
     "minecraft/BrewingStandBlockEntityMixin",
     "minecraft/CampfireBlockEntityMixin",
     "minecraft/SmithingMenuMixin",
+    "minecraft/StonecutterMenuMixin",
     "davespotioneering/AdvancedBrewingStandBlockEntityMixin",
     "visualworkbench/ModCraftingMenuMixin",
-    "farmersdelight/SkilletBlockEntityMixin"
+    "farmersdelight/SkilletBlockEntityMixin",
+    "farmersdelight/CookingPotBlockEntityMixin"
+
   ],
   "client": [],
   "injectors": {

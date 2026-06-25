@@ -5,6 +5,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.inventory.ResultContainer;
+import net.minecraft.world.item.ItemStack; // SAUBERER IMPORT HINZUGEFÜGT
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -32,18 +33,21 @@ public abstract class CraftingMenuMixin {
       return;
     }
 
-    net.minecraft.world.item.ItemStack outputStack = this.resultSlots.getItem(0);
+    // KORREKTUR: Modifikation NUR auf dem Server erlauben, um
+    // Client-Desynchronisationen zu verhindern!
+    if (this.player != null && !this.player.level().isClientSide()) {
+      ItemStack outputStack = this.resultSlots.getItem(0);
 
-    if (!outputStack.isEmpty()) {
-      try {
-        this.itemProductionIsProcessing = true;
+      if (!outputStack.isEmpty()) {
+        try {
+          this.itemProductionIsProcessing = true;
 
-        net.minecraft.world.item.ItemStack modifiedStack = ItemProductionLib.itemProduced(outputStack.copy(),
-            this.player);
+          ItemStack modifiedStack = ItemProductionLib.itemProduced(outputStack.copy(), this.player);
 
-        this.resultSlots.setItem(0, modifiedStack);
-      } finally {
-        this.itemProductionIsProcessing = false;
+          this.resultSlots.setItem(0, modifiedStack);
+        } finally {
+          this.itemProductionIsProcessing = false;
+        }
       }
     }
   }

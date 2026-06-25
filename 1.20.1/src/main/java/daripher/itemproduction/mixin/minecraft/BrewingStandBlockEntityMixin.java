@@ -15,10 +15,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(BrewingStandBlockEntity.class)
 public abstract class BrewingStandBlockEntityMixin {
 
-  private BrewingStandBlockEntityMixin() {
-    throw new IllegalStateException("Mixin class cannot be instantiated");
-  }
-
+  /**
+   * Injiziert sich ans Ende des Brauvorgangs (TAIL) im Vanilla-Braustand.
+   * Der blockierende Konstruktor wurde entfernt, um Injektions-Abstürze zu
+   * verhindern.
+   */
   @Inject(method = "doBrew", at = @At("TAIL"))
   private static void enhanceBrewedPotions(
       Level level,
