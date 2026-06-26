@@ -1,0 +1,38 @@
+license = "${mod_license}"
+loaderVersion = "${loader_version_range}"
+modLoader = "javafml"
+
+[[mods]]
+authors = "${mod_authors}"
+description = '''${mod_description}'''
+displayName = "${mod_name}"
+modId = "${mod_id}"
+version = "${mod_version}"
+
+[[dependencies.itemproductionlib]]
+mandatory = true
+modId = "minecraft"
+ordering = "NONE"
+side = "BOTH"
+versionRange = "${minecraft_version_range}"
+
+[[dependencies.itemproductionlib]]
+mandatory = true
+modId = "forge"
+ordering = "NONE"
+side = "BOTH"
+versionRange = "${forge_version_range}"
+
+[[dependencies.itemproductionlib]]
+mandatory = false
+modId = "farmersdelight"
+ordering = "AFTER"
+side = "BOTH"
+versionRange = "[1.20.1-1.3.2,)"
+
+[[dependencies.itemproductionlib]]
+mandatory = false
+modId = "visualworkbench"
+ordering = "AFTER"
+side = "BOTH"
+versionRange = "[8.0.0,)"
