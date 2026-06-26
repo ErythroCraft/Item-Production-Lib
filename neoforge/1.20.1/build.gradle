@@ -3,7 +3,6 @@ plugins {
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
-    // Aktiviert das NeoForge Legacy-Plugin für 1.20.1
     id 'net.neoforged.moddev.legacyforge'
 }
 
@@ -11,8 +10,10 @@ version = mod_version
 group = mod_group_id
 
 base {
-    archivesName = mod_file_name
+    // Hier wird das Property aus der gradle.properties sauber für den Dateinamen gesetzt
+    archivesName = project.findProperty('mod_file_name') ?: 'ItemProductionLib'
 }
+
 
 java {
     // Erzwingt Java 17 Kompilierung für Minecraft 1.20.1
