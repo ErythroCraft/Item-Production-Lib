@@ -1,3 +1,4 @@
 {
-    "java.compile.nullAnalysis.mode": "none"
+    "java.compile.nullAnalysis.mode": "none",
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

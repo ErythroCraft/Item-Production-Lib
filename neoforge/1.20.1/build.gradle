@@ -1,117 +1,107 @@
-buildscript {
-    repositories {
-        maven { url = 'https://maven.minecraftforge.net' }		
-        maven {
-            url = 'https://repo.spongepowered.org/repository/maven-public/'
-            content { includeGroup "org.spongepowered" }
-        }
-        mavenCentral()
-    }
-    dependencies {
-        // Upgrade auf ForgeGradle 6.0.+ für Kompatibilität mit Gradle 8+ und Java 21 Toolchains
-        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '6.0.24', changing: true
-        // Upgrade auf eine stabile Version von MixinGradle
-        classpath 'org.spongepowered:mixingradle:0.7.38'
-    }
-}
-
 plugins {
+    id 'java'
     id 'eclipse'
+    id 'idea'
     id 'maven-publish'
-    id("net.minecraftforge.gradle") version "7.0.29"
-    id 'org.parchmentmc.librarian.forgegradle' version '1.+'
-    // Offizielle Einbindung des Mixin-Plugins im modernen Gradle-Stil
-    id 'org.spongepowered.mixin' version '0.7.38'
+    // Aktiviert das NeoForge Legacy-Plugin für 1.20.1
+    id 'net.neoforged.moddev.legacyforge'
 }
-
-apply plugin: 'org.spongepowered.mixin'
 
 version = mod_version
 group = mod_group_id
-archivesBaseName = mod_file_name
 
-// DEFINITION DER TOOLCHAIN: 
-// Erlaubt es dir, Gradle mit Java 21 auszuführen, kompiliert den Code im Mod aber strikt 
-// nach Java 17-Standard herunter, damit die .jar in Minecraft 1.20.1 lauffähig ist.
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
-
-mixin {
-    add sourceSets.main, "itemproduction.refmap.json"
-    config "${mod_id}.mixins.json"
+base {
+    archivesName = mod_file_name
 }
 
-minecraft {
-    mappings channel: mapping_channel, version: mapping_version
+java {
+    // Erzwingt Java 17 Kompilierung für Minecraft 1.20.1
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
 
+neoForge {
+    // Entspricht der aktuellen stabilen NeoForge-Version für 1.20.1
+    version = "1.20.1-47.1.106"
+
+    // Nutzt deine in gradle.properties definierten Mappings (z.B. parchment oder official)
+    parchment {
+        minecraftVersion = "1.20.1"
+        // Falls du Parchment nutzt, liest er hier deine Version aus:
+        if (mapping_channel == "parchment") {
+            mappingsVersion = mapping_version
+        }
+    }
+
+    // Konfiguration der Startumgebungen
     runs {
         client {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-            property 'forge.enabledGameTestNamespaces', mod_id
-            mods { "${mod_id}" { source sourceSets.main } }
+            client()
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            systemProperty 'forge.logging.console.level', 'debug'
+            systemProperty 'forge.enabledGameTestNamespaces', mod_id
         }
 
         server {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-            property 'forge.enabledGameTestNamespaces', mod_id
-            mods { "${mod_id}" { source sourceSets.main } }
+            server()
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            systemProperty 'forge.logging.console.level', 'debug'
+            systemProperty 'forge.enabledGameTestNamespaces', mod_id
         }
 
         gameTestServer {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-            property 'forge.enabledGameTestNamespaces', mod_id
-            mods { "${mod_id}" { source sourceSets.main } }
+            gameTestServer()
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            systemProperty 'forge.logging.console.level', 'debug'
+            systemProperty 'forge.enabledGameTestNamespaces', mod_id
         }
 
         data {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-            mods { "${mod_id}" { source sourceSets.main } }
+            data()
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            systemProperty 'forge.logging.console.level', 'debug'
+            programArgs '--mod', mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
         }
+    }
+
+    // Offizielle Mixin-Konfiguration für NeoForge
+    mixin {
+        config "${mod_id}.mixins.json"
     }
 }
 
+// Bindet deine generierten Daten-Ressourcen ein
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
-	maven { url = "https://maven.theillusivec4.top/" }
-	maven {
+    maven { url = "https://maven.theillusivec4.top/" }
+    maven {
         url "https://www.cursemaven.com"
         content { includeGroup "curse.maven" }
     }
+    mavenCentral()
 }
 
 dependencies {
-	minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    // HINWEIS: "minecraft net.minecraftforge" wird vom Plugin AUTOMATISCH geladen!
     
-    // Modernisierte Konfiguration für den AnnotationProcessor in Gradle 8
-	annotationProcessor group: 'org.spongepowered', name: 'mixin', version: '0.8.5', classifier: 'processor'
-    
-    implementation(annotationProcessor("io.github.llamalad7:mixinextras-common:0.2.1"))
-    implementation(jarJar("io.github.llamalad7:mixinextras-forge:0.2.1")) {
-        jarJar.ranged(it, "[0.2.1,)")
-    }
-    
-    // Mod-Abhängigkeiten
-    implementation fg.deobf("curse.maven:farmers-delight-398521:4679319")
-    implementation fg.deobf("curse.maven:jei-238222:4644453")
-    implementation fg.deobf("curse.maven:tetra-289712:4857842")
-    implementation fg.deobf("curse.maven:mutil-351914:4824501")
-    implementation fg.deobf("curse.maven:daves-potioneering-639653:5049324")
-    implementation fg.deobf("curse.maven:geckolib-388172:4933987")
-    implementation fg.deobf("curse.maven:visual-workbench-500273:4612695")
-    implementation fg.deobf("curse.maven:puzzles-lib-495476:5074812")
+    // MixinExtras ist in NeoForge 1.20.1 bereits enthalten, wird hier aber für die IDE registriert
+    compileOnly "io.github.llamalad7:mixinextras-common:0.2.1"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:0.2.1"
+
+    // Deine Mod-Abhängigkeiten (Das alte "fg.deobf(...)" entfällt bei NeoForge vollständig!)
+    implementation "curse.maven:farmers-delight-398521:4679319"
+    implementation "curse.maven:jei-238222:4644453"
+    implementation "curse.maven:tetra-289712:4857842"
+    implementation "curse.maven:mutil-351914:4824501"
+    implementation "curse.maven:daves-potioneering-639653:5049324"
+    implementation "curse.maven:geckolib-388172:4933987"
+    implementation "curse.maven:visual-workbench-500273:4612695"
+    implementation "curse.maven:puzzles-lib-495476:5074812"
 }
 
-def resourceTargets = ['META-INF/mods.toml', 'pack.mcmeta']
-def replaceProperties = [
+// Platzhalter-Ersetzung in mods.toml und pack.mcmeta
+var resourceTargets = ['META-INF/mods.toml', 'pack.mcmeta']
+var replaceProperties = [
         minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
         forge_version: forge_version, forge_version_range: forge_version_range,
         loader_version_range: loader_version_range,
@@ -119,14 +109,14 @@ def replaceProperties = [
         mod_authors: mod_authors, mod_description: mod_description
 ]
 
-processResources {
+tasks.withType(ProcessResources).configureEach {
     inputs.properties replaceProperties
-    replaceProperties.put 'project', project
-    filesMatching(resourceTargets) { expand replaceProperties }
+    filesMatching(resourceTargets) {
+        expand replaceProperties
+    }
 }
 
 jar {
-    // NEU: Sagt Gradle 8+, dass doppelte Dateien (wie die Refmap) einfach übersprungen werden sollen
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     manifest {
@@ -137,22 +127,13 @@ jar {
                 "Implementation-Title"    : project.name,
                 "Implementation-Version"  : project.jar.archiveVersion,
                 "Implementation-Vendor"   : mod_authors,
-                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                "MixinConfigs"            : "${mod_id}.mixins.json"
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
 }
 
-jar.finalizedBy('reobfJar')
+// Das alte "reobfJar" entfällt, da NeoForge das Kompilieren vollautomatisch regelt.
 
-// Aktiviert den Annotation-Processor für Gradle 8+ fehlerfrei
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.annotationProcessorPath = files(configurations.annotationProcessor)
-    options.compilerArgs.addAll([
-        // Schreibt die Refmap direkt dorthin, wo Gradle die Ressourcen für die JAR sammelt
-        "-AoutRefMapFile=${project.buildDir}/resources/main/itemproduction.refmap.json",
-        "-AdefaultObfuscationEnv=searge"
-    ])
 }
-
