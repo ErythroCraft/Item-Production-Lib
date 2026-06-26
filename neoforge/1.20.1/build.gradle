@@ -3,37 +3,44 @@ plugins {
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
-    id 'net.neoforged.moddev.legacyforge'
+    // Lädt das Plugin genau in deiner Version
+    id 'net.neoforged.moddev.legacyforge' version '2.0.141'
 }
 
 version = mod_version
 group = mod_group_id
 
 base {
-    // Hier wird das Property aus der gradle.properties sauber für den Dateinamen gesetzt
     archivesName = project.findProperty('mod_file_name') ?: 'ItemProductionLib'
 }
 
-
 java {
-    // Erzwingt Java 17 Kompilierung für Minecraft 1.20.1
     toolchain.languageVersion = JavaLanguageVersion.of(17)
 }
 
-neoForge {
-    // Entspricht der aktuellen stabilen NeoForge-Version für 1.20.1
-    version = "1.20.1-47.1.106"
+// KORREKTUR FÜR V2.0+: Die Versionen werden jetzt über das "legacyForge"-Objekt konfiguriert
+legacyForge {
+    validateConfig = true
 
-    // Nutzt deine in gradle.properties definierten Mappings (z.B. parchment oder official)
+    // Setzt Minecraft 1.20.1 und NeoForge 47.1.106 aus deinen properties
+    minecraftVersion = project.minecraft_version
+    forgeVersion = project.forge_version
+
+    // Mappings registrieren
     parchment {
         minecraftVersion = "1.20.1"
-        // Falls du Parchment nutzt, liest er hier deine Version aus:
         if (mapping_channel == "parchment") {
             mappingsVersion = mapping_version
         }
     }
 
-    // Konfiguration der Startumgebungen
+    // Definiert, welches SourceSet zu deiner Mod gehört (Zwingend erforderlich in v2.0+)
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+
     runs {
         client {
             client()
@@ -64,32 +71,28 @@ neoForge {
         }
     }
 
-    // Offizielle Mixin-Konfiguration für NeoForge
     mixin {
         config "${mod_id}.mixins.json"
     }
 }
 
-// Bindet deine generierten Daten-Ressourcen ein
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
-    maven { url = "https://maven.theillusivec4.top/" }
+    maven { url = "https://theillusivec4.top" }
     maven {
-        url "https://www.cursemaven.com"
+        url "https://cursemaven.com"
         content { includeGroup "curse.maven" }
     }
     mavenCentral()
 }
 
 dependencies {
-    // HINWEIS: "minecraft net.minecraftforge" wird vom Plugin AUTOMATISCH geladen!
-    
-    // MixinExtras ist in NeoForge 1.20.1 bereits enthalten, wird hier aber für die IDE registriert
+    // MixinExtras für deine IDE
     compileOnly "io.github.llamalad7:mixinextras-common:0.2.1"
     annotationProcessor "io.github.llamalad7:mixinextras-common:0.2.1"
 
-    // Deine Mod-Abhängigkeiten (Das alte "fg.deobf(...)" entfällt bei NeoForge vollständig!)
+    // Externe Abhängigkeiten
     implementation "curse.maven:farmers-delight-398521:4679319"
     implementation "curse.maven:jei-238222:4644453"
     implementation "curse.maven:tetra-289712:4857842"
@@ -100,7 +103,6 @@ dependencies {
     implementation "curse.maven:puzzles-lib-495476:5074812"
 }
 
-// Platzhalter-Ersetzung in mods.toml und pack.mcmeta
 var resourceTargets = ['META-INF/mods.toml', 'pack.mcmeta']
 var replaceProperties = [
         minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
@@ -132,8 +134,6 @@ jar {
         ])
     }
 }
-
-// Das alte "reobfJar" entfällt, da NeoForge das Kompilieren vollautomatisch regelt.
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
