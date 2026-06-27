@@ -1,9 +1,0 @@
-pluginManagement {
-    repositories {
-        gradlePluginPortal()
-        maven { url = 'https://neoforged.net' }
-        maven { url = 'https://parchmentmc.org' }
-        mavenCentral()
-    }
-}
-rootProject.name = 'ItemProductionLibRecoded'
