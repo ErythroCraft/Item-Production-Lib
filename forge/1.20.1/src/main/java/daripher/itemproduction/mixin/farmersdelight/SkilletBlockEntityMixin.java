@@ -14,12 +14,17 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(targets = "vectorwing.farmersdelight.common.block.entity.SkilletBlockEntity", remap = false)
+// 1. Importiere die Klasse direkt von Farmer's Delight
+import vectorwing.farmersdelight.common.block.entity.SkilletBlockEntity;
+
+// 2. Nutze "value" statt "targets" (remap bleibt auf false)
+@Mixin(value = SkilletBlockEntity.class, remap = false)
 public class SkilletBlockEntityMixin {
 
-    @Inject(method = "cookingTick", at = @At("TAIL"))
+    // 2. remap = false stellt sicher, dass der Compiler nicht nach MCP/SRG-Mappings sucht
+    @Inject(method = "cookingTick", at = @At("TAIL"), remap = false)
     private static void modifySkilletOutputViaForge(Level level, BlockPos pos, BlockState state,
-            @Coerce BlockEntity blockEntity, CallbackInfo ci) {
+                                                    @Coerce BlockEntity blockEntity, CallbackInfo ci) {
         if (level == null || level.isClientSide() || blockEntity == null) {
             return;
         }
@@ -29,8 +34,6 @@ public class SkilletBlockEntityMixin {
                 ItemStack stack = handler.getStackInSlot(slot);
 
                 if (!stack.isEmpty()) {
-                    // Wir modifizieren das Item – das Spawn-Event in der Hauptklasse erledigt den
-                    // Rest fehlerfrei
                     ItemStack modified = ItemProductionLib.itemProduced(stack.copy(), blockEntity);
                     stack.setTag(modified.getTag());
                     stack.setCount(modified.getCount());

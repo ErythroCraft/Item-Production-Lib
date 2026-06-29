@@ -16,6 +16,7 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -25,13 +26,15 @@ public class ItemProductionLib {
     public static final String MOD_ID = "itemproductionlib";
     private static final Logger LOGGER = LogManager.getLogger("ItemProductionLib");
 
+    @SuppressWarnings("removal")
     public ItemProductionLib() {
         IEventBus forgeEventBus = MinecraftForge.EVENT_BUS;
         forgeEventBus.addListener(this::onItemSpawnInWorld);
         forgeEventBus.register(this);
 
-        // REPARATUR: Registriert die Config als COMMON im normalen Hauptordner (config/)
-        net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
+        // KORREKTUR: Nutzt die korrekte 3-Parameter-Signatur über ModLoadingContext.get()
+        // Forge zieht sich den Mod-Kontext hierbei automatisch über die aktuell geladene Klasse
+        ModLoadingContext.get().registerConfig(
                 net.minecraftforge.fml.config.ModConfig.Type.COMMON,
                 daripher.itemproduction.config.ModConfig.SERVER_SPEC,
                 "itemproductionlib-common.toml"
@@ -128,7 +131,6 @@ public class ItemProductionLib {
 
         return finalModifiedStack;
     }
-
 
     /**
      * Fallback method for block entities that route through to the interactive user.

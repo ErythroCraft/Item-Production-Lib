@@ -14,49 +14,50 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+// 1. remap = false auf Klassenebene deaktiviert das automatische Mapping für die Mod-Felder
 @Mixin(value = ModCraftingMenu.class, remap = false)
 public class ModCraftingMenuMixin {
 
-  @Shadow
-  @Final
-  private ResultContainer resultSlots;
+    @Shadow
+    @Final
+    private ResultContainer resultSlots;
 
-  @Shadow
-  @Final
-  private Player player;
+    @Shadow
+    @Final
+    private Player player;
 
-  @Unique
-  private boolean itemProductionIsProcessing = false;
+    @Unique
+    private boolean itemProductionIsProcessing = false;
 
-  /**
-   * Wird aufgerufen, wenn sich die Items im Gitter der Visual Workbench ändern.
-   * Berechnet und aktualisiert die Skilltree-Boni für das fertige Produkt.
-   */
-  @Inject(method = "slotsChanged", at = @At(value = "TAIL"))
-  private void itemProduced(Container container, CallbackInfo callbackInfo) {
-    if (this.itemProductionIsProcessing) {
-      return;
-    }
-
-    // KORREKTUR: Modifikation NUR auf der Serverseite erlauben!
-    // Das verhindert NBT-Desynchronisationen und "Geister-Items" in der Visual
-    // Workbench.
-    if (this.player != null && !this.player.level().isClientSide()) {
-      ItemStack outputStack = this.resultSlots.getItem(0);
-
-      if (!outputStack.isEmpty()) {
-        try {
-          this.itemProductionIsProcessing = true;
-
-          // Boni über deine Hauptklasse berechnen
-          ItemStack modifiedStack = ItemProductionLib.itemProduced(outputStack.copy(), this.player);
-
-          // Das verbesserte Item zurück in den Ausgabeslot der Visual Workbench legen
-          this.resultSlots.setItem(0, modifiedStack);
-        } finally {
-          this.itemProductionIsProcessing = false;
+    /**
+     * Wird aufgerufen, wenn sich die Items im Gitter der Visual Workbench ändern.
+     * Berechnet und aktualisiert die Skilltree-Boni für das fertige Produkt.
+     */
+    // 2. remap = true ist HIER wichtig, da "slotsChanged" eine Vanilla-Minecraft-Methode ist!
+    @Inject(method = "slotsChanged", at = @At(value = "TAIL"), remap = true)
+    private void itemProduced(Container container, CallbackInfo callbackInfo) {
+        if (this.itemProductionIsProcessing) {
+            return;
         }
-      }
+
+        // KORREKTUR: Modifikation NUR auf der Serverseite erlauben!
+        // Das verhindert NBT-Desynchronisationen und "Geister-Items" in der Visual Workbench.
+        if (this.player != null && !this.player.level().isClientSide()) {
+            ItemStack outputStack = this.resultSlots.getItem(0);
+
+            if (!outputStack.isEmpty()) {
+                try {
+                    this.itemProductionIsProcessing = true;
+
+                    // Boni über deine Hauptklasse berechnen
+                    ItemStack modifiedStack = ItemProductionLib.itemProduced(outputStack.copy(), this.player);
+
+                    // Das verbesserte Item zurück in den Ausgabeslot der Visual Workbench legen
+                    this.resultSlots.setItem(0, modifiedStack);
+                } finally {
+                    this.itemProductionIsProcessing = false;
+                }
+            }
+        }
     }
-  }
 }

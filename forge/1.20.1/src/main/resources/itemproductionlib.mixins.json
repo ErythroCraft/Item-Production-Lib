@@ -5,17 +5,15 @@
   "package": "daripher.itemproduction.mixin",
   "mixins": [
     "davespotioneering/AdvancedBrewingStandBlockEntityMixin",
-    "farmersdelight/SkilletBlockEntityMixin",
     "farmersdelight/CookingPotMenuMixin",
-
+    "farmersdelight/SkilletBlockEntityMixin",
     "minecraft/AbstractFurnaceBlockEntityMixin",
     "minecraft/BlockEntityMixin",
     "minecraft/BrewingStandBlockEntityMixin",
     "minecraft/CampfireBlockEntityMixin",
-    "minecraft/CampfireBlockEntityMixin",
-    "minecraft.SlotMixin",
+    "minecraft/ResultSlotMixin",
+    "minecraft/SlotMixin",
     "minecraft/SmithingMenuMixin",
-
     "visualworkbench/ModCraftingMenuMixin"
   ],
   "client": [],

@@ -1,8 +1,6 @@
 package daripher.itemproduction.mixin.minecraft;
 
-import daripher.itemproduction.ItemProductionLib;
 import daripher.itemproduction.util.ItemProcessingHelper;
-import net.minecraft.client.gui.screens.inventory.StonecutterScreen;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AnvilMenu;
@@ -15,11 +13,12 @@ import net.minecraft.world.inventory.MerchantResultSlot;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.SmithingMenu;
-import net.minecraft.world.inventory.StonecutterMenu;
 import net.minecraft.world.item.ItemStack;
+import daripher.itemproduction.ItemProductionLib;
+import net.minecraft.client.gui.screens.inventory.StonecutterScreen;
+import net.minecraft.world.inventory.StonecutterMenu;
 import net.minecraft.world.level.block.StonecutterBlock;
 import se.mickelus.tetra.items.forged.StonecutterItem;
-
 import org.antlr.v4.misc.EscapeSequenceParsing.Result;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -31,8 +30,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Slot.class)
 public abstract class SlotMixin {
 
+    // Ersetzt die fehlerhafte getSlotIndex()-Methode durch das echte Minecraft-Feld für die Slot-ID
     @Shadow
-    public abstract int getSlotIndex();
+    public int index;
 
     @Unique
     private static long lastProcessedGameTime = -1L;
@@ -40,9 +40,6 @@ public abstract class SlotMixin {
     @Unique
     private static int lastProcessedSlotId = -1;
 
-    /**
-     * Injects into the onTake method of any slot to intercept item creation safely.
-     */
     /**
      * Injects into the onTake method of any slot to intercept item creation safely.
      */
@@ -58,13 +55,9 @@ public abstract class SlotMixin {
             return;
         }
 
-        // 1. Variablen sauber definieren
-        int slotId = this.getSlotIndex();
+        // 1. Variablen sauber definieren (Nutzt jetzt das korrekte Feld "index")
+        int slotId = this.index;
         String menuClassName = containerMenu.getClass().getName();
-
-        // 2. Deine Test-Logzeile (Nutzt jetzt die korrekt deklarierten Variablen)
-        // Hinweis: Falls "LOGGER" in dieser Klasse nicht existiert, nutze System.out.println
-        System.out.println("[ItemProductionLib-TEST] Klick auf Slot: " + slotId + " im Menü: " + menuClassName);
 
         // Passive click converter: Immediately stamp old items in chests when clicked
         convertOldItemsOnClick(containerMenu, slotId, player);
@@ -106,6 +99,10 @@ public abstract class SlotMixin {
             isOutputSlot = true;
         }
 
+        // Falls es sich um einen Output-Slot handelt, aktualisiere den Debounce Tracker
+        if (isOutputSlot) {
+            updateDebounceTracker(currentTick, slotId);
+        }
     }
 
     /**
@@ -116,7 +113,6 @@ public abstract class SlotMixin {
         lastProcessedGameTime = currentTick;
         lastProcessedSlotId = slotId;
     }
-
 
     /**
      * FIXED java:S117: Renamed to match the required camelCase regular expression.
@@ -141,7 +137,6 @@ public abstract class SlotMixin {
             // Protects against invalid slot indices
         }
     }
-
 
     @Unique
     private boolean isGeneralTargetItem(ItemStack stack) {
