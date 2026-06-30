@@ -5,75 +5,111 @@ import daripher.itemproduction.block.entity.Interactive;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Containers;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CampfireCookingRecipe;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.CampfireBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.Optional;
 
 @Mixin(CampfireBlockEntity.class)
 public class CampfireBlockEntityMixin {
 
     /**
-     * Injiziert sich ans ENDE von cookTick.
-     * Triggert EXAKT in der Sekunde, in der ein Item auf dem Lagerfeuer fertig gebraten wurde.
+     * Klinkt sich am ANFANG (HEAD) von cookTick ein.
+     * Hier sind die fertigen Items noch physikalisch im Slot vorhanden, 
+     * bevor Minecraft sie im selben Tick löscht und auswirft!
      */
-    @Inject(method = "cookTick", at = @At("TAIL"))
-    private static void onCampfireCookingFinished(Level level, BlockPos pos, BlockState state,
-                                                  CampfireBlockEntity blockEntity, CallbackInfo ci) {
+    @Inject(method = "cookTick", at = @At("HEAD"), remap = true)
+    private static void onCampfireCookingFinished(Level level, BlockPos pos, BlockState state, CampfireBlockEntity blockEntity, CallbackInfo ci) {
         if (level == null || level.isClientSide() || blockEntity == null) {
             return;
         }
 
-        if (blockEntity instanceof Interactive interactive) {
-            // Sichere Spieler-Ermittlung via UUID (Ohne schwere Umkreissuche im Dauertakt!)
-            Player foundPlayer = interactive.resolveUser(level);
-
-            // Fallback: Nur wenn KEINE UUID existiert (z. B. Automatisierung), suchen wir den nächsten Spieler
-            if (foundPlayer == null) {
-                foundPlayer = level.getNearestPlayer(pos.getX(), pos.getY(), pos.getZ(), 8.0, p -> p instanceof ServerPlayer);
-            }
-
-            if (foundPlayer instanceof ServerPlayer serverPlayer) {
-                processFinishedCampfireItems(blockEntity, serverPlayer);
-            }
-        }
-    }
-
-    /**
-     * Hilfsmethode, um das fertige Item an deine Lib zu übergeben.
-     * Nutzt den neuen Accessor, um völlig barrierefrei auf die privaten Arrays zuzugreifen.
-     */
-    @Unique
-    private static void processFinishedCampfireItems(CampfireBlockEntity blockEntity, ServerPlayer player) {
-        // Holt die privaten Arrays sauber über das Accessor-Interface
         CampfireBlockEntityAccessor accessor = (CampfireBlockEntityAccessor) blockEntity;
         int[] cookingProgress = accessor.itemproductionGetCookingProgress();
         int[] cookingTime = accessor.itemproductionGetCookingTime();
         NonNullList<ItemStack> items = blockEntity.getItems();
 
-        for (int i = 0; i < items.size(); i++) {
-            // Wenn der Fortschritt exakt die maximale Kochzeit erreicht hat
-            if (cookingProgress[i] >= cookingTime[i] && cookingTime[i] > 0) {
-                ItemStack finishedItem = items.get(i);
+        if (cookingProgress == null || cookingTime == null || items == null) {
+            return;
+        }
 
-                if (!finishedItem.isEmpty()) {
-                    int count = finishedItem.getCount();
-                    String itemName = finishedItem.getItem().toString();
-                    String playerName = player.getName().getString();
+        // Das Lagerfeuer besitzt bis zu 4 Slots parallel
+        for (int i = 0; i < Math.min(cookingProgress.length, items.size()); i++) {
+            if (i >= cookingTime.length) continue;
 
-                    // Logger füttern
-                    daripher.itemproduction.util.DebugLogger.logCookingPotStack(playerName, itemName, count, "SERVER_CAMPFIRE_FINISHED");
+            // KORREKTUR: Fängt den exakten Moment des Fertigwerdens im Server-Tick ab
+            if (cookingProgress[i] >= cookingTime[i] - 1 && cookingTime[i] > 0) {
+                ItemStack rawInput = items.get(i);
 
-                    // Saubere, tag-freie Kopie an deine Lib übergeben
-                    ItemProductionLib.itemProduced(finishedItem.copy(), player);
+                if (rawInput != null && !rawInput.isEmpty()) {
+                    // Spieler über das globale NBT-Gedächtnis ermitteln
+                    Player foundPlayer = null;
+                    if (blockEntity instanceof Interactive interactive) {
+                        foundPlayer = interactive.resolveUser(level);
+                    }
 
-                    daripher.itemproduction.util.DebugLogger.logStackLoopEnd();
+                    ServerPlayer targetPlayer = null;
+                    if (foundPlayer instanceof ServerPlayer serverPlayer) {
+                        targetPlayer = serverPlayer;
+                    } else {
+                        // Fallback Umkreis
+                        Player closestPlayer = level.getNearestPlayer(pos.getX(), pos.getY(), pos.getZ(), 8.0, false);
+                        if (closestPlayer instanceof ServerPlayer serverPlayer) {
+                            targetPlayer = serverPlayer;
+                        }
+                    }
+
+                    if (targetPlayer != null) {
+                        // Wir ermitteln das fertige Bratergebnis über den 1.20.1 RecipeManager
+                        ItemStack cookedResult = ItemStack.EMPTY;
+                        try {
+                            SimpleContainer temporaryContainer = new SimpleContainer(rawInput);
+                            Optional<CampfireCookingRecipe> recipe = level.getRecipeManager()
+                                    .getRecipeFor(RecipeType.CAMPFIRE_COOKING, temporaryContainer, level);
+
+                            if (recipe.isPresent()) {
+                                cookedResult = recipe.get().getResultItem(level.registryAccess());
+                            }
+                        } catch (Exception ignored) {
+                            continue;
+                        }
+
+                        if (cookedResult == null || cookedResult.isEmpty()) {
+                            continue;
+                        }
+
+                        // Jedes der 4 Items wird separat als Menge 1 durch die Library geschickt!
+                        // Dadurch wird die Prozentchance für jedes Fleischstück völlig unabhängig berechnet.
+                        ItemStack targetStack = cookedResult.copy();
+                        targetStack.setCount(1);
+
+                        ItemStack bonusResult = ItemProductionLib.itemProduced(targetStack, targetPlayer, "campfire");
+
+                        // Wenn dein Skill-Tree für dieses spezifische Item zugeschlagen hat
+                        int bonusAmount = bonusResult.getCount() - 1;
+                        if (bonusAmount > 0) {
+                            ItemStack extraDrop = bonusResult.copy();
+                            extraDrop.setCount(bonusAmount);
+
+                            // Spawnt das zusätzliche Fleisch physisch als extra Drop über dem Lagerfeuer
+                            Containers.dropItemStack(level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, extraDrop);
+
+                            org.apache.logging.log4j.LogManager.getLogger("ItemProductionLib")
+                                    .warn("[LAGERFEUER-BONUS] Slot {} erfolgreich! +{} extra '{}' fuer {} generiert!", 
+                                            i, bonusAmount, extraDrop.getItem().toString(), targetPlayer.getName().getString());
+                        }
+                    }
                 }
             }
         }

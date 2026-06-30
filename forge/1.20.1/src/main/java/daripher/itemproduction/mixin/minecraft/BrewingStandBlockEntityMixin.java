@@ -1,7 +1,7 @@
 package daripher.itemproduction.mixin.minecraft;
 
 import daripher.itemproduction.ItemProductionLib;
-import daripher.itemproduction.block.entity.Interactive; // Das neue Interface importieren
+import daripher.itemproduction.block.entity.Interactive;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
 import net.minecraft.server.level.ServerPlayer;
@@ -25,14 +25,14 @@ public abstract class BrewingStandBlockEntityMixin {
      * Injiziert sich am Ende des Vanilla-Brauvorgangs (TAIL).
      * Komplett befreit von Item-Tags für perfektes Trank-Stacking.
      */
-    @Inject(method = "doBrew", at = @At("TAIL"))
+    @Inject(method = "doBrew", at = @At("TAIL"), remap = true)
     private static void enhanceBrewedPotions(
             Level level,
             @Nonnull BlockPos blockPos,
             NonNullList<ItemStack> itemStacks,
             CallbackInfo callbackInfo) {
 
-        if (level == null || level.isClientSide()) {
+        if (level == null || level.isClientSide() || itemStacks == null) {
             return;
         }
 
@@ -41,7 +41,7 @@ public abstract class BrewingStandBlockEntityMixin {
             return;
         }
 
-        // 1. Greife über das neue Interactive-Interface sicher auf den Spieler zu
+        // 1. Greife über das Interactive-Interface sicher auf den Spieler zu
         Player foundPlayer = null;
         if (blockEntity instanceof Interactive interactive) {
             foundPlayer = interactive.resolveUser(level);
@@ -52,7 +52,7 @@ public abstract class BrewingStandBlockEntityMixin {
             targetPlayer = serverPlayer;
         }
 
-        // FALLBACK: Falls automatisiert gebraut wurde (z.B. Hopper befüllt), nimm den nächsten Spieler
+        // FALLBACK: Falls automatisiert gebraut wurde, nimm den nächsten Spieler
         if (targetPlayer == null) {
             Player closestPlayer = level.getNearestPlayer(blockPos.getX(), blockPos.getY(), blockPos.getZ(), 8.0, false);
             if (closestPlayer instanceof ServerPlayer serverPlayer) {
@@ -67,18 +67,11 @@ public abstract class BrewingStandBlockEntityMixin {
                 ItemStack stack = itemStacks.get(slot);
 
                 if (!stack.isEmpty()) {
-                    int count = stack.getCount();
-                    String itemName = stack.getItem().toString();
-                    String playerName = targetPlayer.getName().getString();
+                    // KORREKTUR 1: Typ-Angabe "brewing" explizit mitsenden, damit deine Configs greifen
+                    // KORREKTUR 2: Wir übergeben den ECHTEN Stack. Die Library erhöht die Anzahl direkt im Objekt.
+                    ItemProductionLib.itemProduced(stack, targetPlayer, "brewing");
 
-                    // Logger füttern
-                    daripher.itemproduction.util.DebugLogger.logCookingPotStack(playerName, itemName, count, "SERVER_VANILLA_BREWING_FINISHED");
-
-                    // Übergibt eine saubere Kopie des Tranks an deine Lib. 
-                    // Die Trankflasche im Slot bleibt komplett tag-frei und perfekt stapelbar!
-                    ItemProductionLib.itemProduced(stack.copy(), targetPlayer);
-
-                    daripher.itemproduction.util.DebugLogger.logStackLoopEnd();
+                    // KORREKTUR 3: Veraltete Logger-Schleifen-Methoden wurden sauber entfernt
                 }
             }
         }

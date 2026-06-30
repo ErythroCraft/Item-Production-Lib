@@ -28,7 +28,7 @@ public abstract class SlotMixin {
      * Filtert gezielt die verbleibenden Vanilla-Ausgabelots heraus.
      * Vollständig befreit von Item-Tags für perfektes Gegenstands-Stacking!
      */
-    @Inject(method = "onTake", at = @At("HEAD"))
+    @Inject(method = "onTake", at = @At("HEAD"), remap = true)
     private void onTakeItemFromOutputSlot(Player player, ItemStack stack, CallbackInfo ci) {
         // Nur auf dem Server verarbeiten, wenn das Item nicht leer ist
         if (player == null || player.level().isClientSide() || stack.isEmpty() || !(player instanceof ServerPlayer serverPlayer)) {
@@ -43,21 +43,21 @@ public abstract class SlotMixin {
         int slotId = this.index;
 
         // Wir prüfen nur noch Menüs, die wir NICHT bereits über spezifische Mixins abgefangen haben.
-        // Kochtopf, Pfanne, Braustand, Schmiedetisch und Werkbänke sind bereits autark und hier tabu!
         if (isRemainingVanillaOutputSlot(containerMenu, slotId)) {
             try {
-                int count = stack.getCount();
-                String itemName = stack.getItem().toString();
-                String playerName = serverPlayer.getName().getString();
+                // KORREKTUR 1: Dynamische Typ-Erkennung für das Log, damit deine Config-Schalter exakt getroffen werden
+                String productionType = "ui_production";
+                if (containerMenu instanceof AnvilMenu) productionType = "anvil";
+                else if (containerMenu instanceof GrindstoneMenu) productionType = "grindstone";
+                else if (containerMenu instanceof CartographyTableMenu) productionType = "cartography_table";
+                else if (containerMenu instanceof EnchantmentMenu) productionType = "enchantment";
 
-                // Logger füttern
-                daripher.itemproduction.util.DebugLogger.logCookingPotStack(playerName, itemName, count, "PLAYER_UI_PRODUCTION_FINISHED");
+                // KORREKTUR 2: Wir reichen den ECHTEN Stack hinein, kein .copy()!
+                // Die Library berechnet die Boni und erhöht die Anzahl direkt in dem Gegenstand,
+                // den der Spieler gerade mit der Maus aus dem UI zieht!
+                ItemProductionLib.itemProduced(stack, serverPlayer, productionType);
 
-                // Übergibt eine saubere Kopie des Items an deine Lib.
-                // Das Item im Slot bleibt komplett tag-frei und stapelt sich perfekt im Inventar!
-                ItemProductionLib.itemProduced(stack.copy(), serverPlayer);
-
-                daripher.itemproduction.util.DebugLogger.logStackLoopEnd();
+                // KORREKTUR 3: Veraltete Logger-Schleifen-Methoden wurden entfernt
             } catch (Exception e) {
                 org.apache.logging.log4j.LogManager.getLogger("ItemProductionLib")
                         .warn("[UI-FEHLER] Fehler bei der Verarbeitung im Slot {}: {}", slotId, e.getMessage());

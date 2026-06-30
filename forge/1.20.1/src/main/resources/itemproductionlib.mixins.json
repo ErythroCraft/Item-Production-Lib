@@ -7,7 +7,6 @@
     "davespotioneering.AdvancedBrewingStandBlockEntityMixin",
     "davespotioneering.AdvancedBrewingStandBlockEntityTrackMixin",
     "farmersdelight.CookingPotBlockEntityMixin",
-    "farmersdelight.CookingPotBlockEntityTrackMixin",
     "farmersdelight.SkilletBlockEntityMixin",
     "farmersdelight.SkilletBlockEntityTrackMixin",
     "minecraft.AbstractFurnaceBlockEntityAccessor",
@@ -17,9 +16,9 @@
     "minecraft.BrewingStandBlockEntityTrackMixin",
     "minecraft.CampfireBlockEntityAccessor",
     "minecraft.CampfireBlockEntityMixin",
+    "minecraft.ItemCombinerMenuAccessor",
     "minecraft.SlotMixin",
     "minecraft.SmithingResultSlotMixin",
-    "minecraft.ItemCombinerMenuAccessor",
     "minecraft.StonecutterResultSlotMixin",
     "visualworkbench.CraftingResultSlotMixin"
   ],

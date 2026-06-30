@@ -13,10 +13,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-// 1. Importiere die Klasse direkt aus Dave's Potioneering
+// Importiere die Klasse direkt aus Dave's Potioneering
 import tfar.davespotioneering.blockentity.AdvancedBrewingStandBlockEntity;
 
-// 2. KORREKTUR: Nutze "value" statt "targets" und setze remap auf false
 @Mixin(value = AdvancedBrewingStandBlockEntity.class, remap = false)
 public class AdvancedBrewingStandBlockEntityTrackMixin implements Interactive {
 
@@ -47,7 +46,9 @@ public class AdvancedBrewingStandBlockEntityTrackMixin implements Interactive {
         this.itemproductionUserUuid = uuid;
     }
 
-    // FIX: remap = false gesetzt und Descriptor durch Player-Parameter eindeutig definiert
+    /**
+     * Bleibt bei remap = false, da 'startOpen' eine eigene Methode von Dave's Potioneering ist.
+     */
     @Inject(method = "startOpen", at = @At("HEAD"), remap = false)
     private void onStartOpen(Player player, CallbackInfo ci) {
         if (player != null && !player.level().isClientSide()) {
@@ -56,8 +57,11 @@ public class AdvancedBrewingStandBlockEntityTrackMixin implements Interactive {
         }
     }
 
-    // FIX: remap = false gesetzt und CallbackInfoReturnable<Boolean> genutzt, da stillValid ein Boolean liefert!
-    @Inject(method = "stillValid", at = @At("HEAD"), remap = false)
+    /**
+     * KORREKTUR 1: remap = true gesetzt! 'stillValid' kommt aus dem Minecraft-Container-System
+     * und wird im echten Build verschleiert.
+     */
+    @Inject(method = "stillValid", at = @At("HEAD"), remap = true)
     private void onStillValid(Player player, CallbackInfoReturnable<Boolean> cir) {
         if (player != null && !player.level().isClientSide()) {
             this.itemproductionUser = player;
@@ -65,14 +69,18 @@ public class AdvancedBrewingStandBlockEntityTrackMixin implements Interactive {
         }
     }
 
-    // Schreibt die UUID über die standardisierte Interface-Logik in die Speicherdatei (remap = false)
-    @Inject(method = "saveAdditional", at = @At("TAIL"), remap = false)
+    /**
+     * KORREKTUR 2: remap = true gesetzt, da 'saveAdditional' eine echte Minecraft-Methode ist!
+     */
+    @Inject(method = "saveAdditional", at = @At("TAIL"), remap = true)
     private void onSave(CompoundTag tag, CallbackInfo ci) {
         this.saveUserNbt(tag);
     }
 
-    // Lädt die UUID über die standardisierte Interface-Logik ein (remap = false)
-    @Inject(method = "load", at = @At("TAIL"), remap = false)
+    /**
+     * KORREKTUR 3: remap = true gesetzt, da 'load' eine echte Minecraft-Methode ist!
+     */
+    @Inject(method = "load", at = @At("TAIL"), remap = true)
     private void onLoad(CompoundTag tag, CallbackInfo ci) {
         this.loadUserNbt(tag, (net.minecraft.world.level.block.entity.BlockEntity) (Object) this);
     }

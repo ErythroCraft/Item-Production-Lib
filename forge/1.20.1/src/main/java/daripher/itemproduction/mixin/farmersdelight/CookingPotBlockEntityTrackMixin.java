@@ -4,11 +4,8 @@ import daripher.itemproduction.block.entity.Interactive;
 
 import java.util.UUID;
 
-import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -27,6 +24,7 @@ public class CookingPotBlockEntityTrackMixin implements Interactive {
     @Unique
     private UUID itemproductionUserUuid = null;
 
+    // --- INTERFACE IMPLEMENTIERUNG (Getter & Setter) ---
     @Override
     public Player getUser() {
         return this.itemproductionUser;
@@ -48,29 +46,18 @@ public class CookingPotBlockEntityTrackMixin implements Interactive {
     }
 
     /**
-     * FIX: Statt startOpen/stillValid nutzen wir die genuine Server-Tick-Methode des Kochtopfs (cookingTick).
-     * Da die Hauptklasse 'ItemProductionLib' die Daten beim Rechtsklick bereits einspeist,
-     * sorgt dieser Tick nur dafür, dass der Spieler-Cache nach Server-Neustarts live reaktiviert wird.
+     * KORREKTUR: remap = true gesetzt, da saveAdditional eine originale Minecraft-Methode ist.
+     * Sichert die Spieler-Daten dauerhaft im NBT-Tag des Blocks.
      */
-    @Inject(method = "cookingTick", at = @At("HEAD"))
-    private static void onCookingTickUpdate(Level level, BlockPos pos, BlockState state, CookingPotBlockEntity blockEntity, CallbackInfo ci) {
-        if (level == null || level.isClientSide() || blockEntity == null) {
-            return;
-        }
-
-        // Falls die UUID geladen wurde, aber das direkte Spieler-Objekt im Cache null ist,
-        // reaktivieren wir es sicher über die resolveUser-Methode aus deinem Interface!
-        if (blockEntity instanceof Interactive interactive && interactive.getUser() == null) {
-            interactive.resolveUser(level);
-        }
-    }
-
-    // Die NBT-Speicherung bleibt exakt so wie sie war und sichert die UUID in den Weltdaten
     @Inject(method = "saveAdditional", at = @At("TAIL"), remap = true)
     private void onSave(CompoundTag tag, CallbackInfo ci) {
         this.saveUserNbt(tag);
     }
 
+    /**
+     * KORREKTUR: remap = true gesetzt, da load eine originale Minecraft-Methode ist.
+     * Lädt die Spieler-Daten nach einem Server-Neustart oder Chunk-Wechsel fehlerfrei ein.
+     */
     @Inject(method = "load", at = @At("TAIL"), remap = true)
     private void onLoad(CompoundTag tag, CallbackInfo ci) {
         this.loadUserNbt(tag, (net.minecraft.world.level.block.entity.BlockEntity) (Object) this);

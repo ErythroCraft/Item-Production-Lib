@@ -33,18 +33,12 @@ public class CraftingResultSlotMixin {
         }
 
         try {
-            int count = stack.getCount();
-            String itemName = stack.getItem().toString();
-            String playerName = serverPlayer.getName().getString();
+            // KORREKTUR 1: Wir reichen den ECHTEN Stack hinein, kein .copy()!
+            // Die Library erhöht die Anzahl direkt in dem Gegenstand, den der Spieler gerade aus dem Slot zieht.
+            // Der Typ "crafting" wird mitgesendet, damit deine Configs und Logs exakt greifen.
+            ItemProductionLib.itemProduced(stack, serverPlayer, "crafting");
 
-            // Logger füttern mit dem echten Crafting-Event
-            daripher.itemproduction.util.DebugLogger.logCookingPotStack(playerName, itemName, count, "PLAYER_CRAFTING_FINISHED");
-
-            // Übergibt eine saubere Kopie des gecrafteten Items an deine Lib.
-            // Das Item landet komplett tag-frei und perfekt stapelbar im Inventar des Spielers!
-            ItemProductionLib.itemProduced(stack.copy(), serverPlayer);
-
-            daripher.itemproduction.util.DebugLogger.logStackLoopEnd();
+            // KORREKTUR 2: Veraltete Schleifen-Logger-Aufrufe entfernt
         } catch (Exception e) {
             org.apache.logging.log4j.LogManager.getLogger("ItemProductionLib")
                     .warn("[CRAFTING-FEHLER] Fehler bei der Verarbeitung im Crafting-Slot: {}", e.getMessage());

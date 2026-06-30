@@ -60,8 +60,7 @@ public class ItemProductionLib {
     /**
      * NEUE ZENTRALE STACK-SICHERUNG (Automod- und Performance-sicher):
      * Schickt den gesamten Stack als Ganzes durch das Event.
-     * Schreibt das Ergebnis DIREKT physisch in das Original-Objekt zurück,
-     * damit Minecraft alle Ofen- und Inventar-Slots fehlerfrei aktualisiert!
+     * Schreibt das Ergebnis DIREKT physisch in das Original-Objekt zurück!
      */
     public static ItemStack itemProduced(ItemStack stack, Player player, String productionType) {
         if (stack.isEmpty() || player == null) {
@@ -81,7 +80,6 @@ public class ItemProductionLib {
         ItemStack resultStack = event.getStack();
 
         // KORREKTUR: Wir weisen dem ECHTEN, übergebenen Stack die neue Gesamtanzahl zu!
-        // Nur so merken Minecraft und Automods live, dass Bonus-Items generiert wurden.
         stack.setCount(resultStack.getCount());
 
         return stack;
@@ -89,13 +87,14 @@ public class ItemProductionLib {
 
     /**
      * Hilfsmethode für Mixins und BlockEntities.
-     * Ermittelt dynamisch den korrekten Produktionstyp, damit der Passive Skill Tree 
-     * die Events nicht wegen des Typs "unknown" blockiert!
+     * KORREKTUR: Scannt nun auch den Block vor den Augen des Spielers, falls kein Menü geöffnet ist.
+     * Das verhindert falsche "crafting"-Zuweisungen bei passiven Hintergrund-Ticks!
      */
     public static ItemStack itemProduced(ItemStack stack, Player player) {
         String detectedType = "crafting"; // Standard-Fallback
 
         if (player instanceof ServerPlayer serverPlayer) {
+            // Check 1: Offenes UI auslesen
             if (serverPlayer.containerMenu instanceof net.minecraft.world.inventory.SmithingMenu) {
                 detectedType = "smithing";
             } else if (serverPlayer.containerMenu instanceof net.minecraft.world.inventory.FurnaceMenu) {
@@ -105,7 +104,6 @@ public class ItemProductionLib {
             } else if (serverPlayer.containerMenu instanceof net.minecraft.world.inventory.SmokerMenu) {
                 detectedType = "smoker";
             } else if (serverPlayer.containerMenu != null) {
-                // Farmer's Delight Menüs über den Klassennamen abfangen
                 String menuName = serverPlayer.containerMenu.getClass().getSimpleName().toLowerCase();
                 if (menuName.contains("cookingpot")) {
                     detectedType = "cookingpot";
@@ -113,8 +111,24 @@ public class ItemProductionLib {
                     detectedType = "skillet";
                 }
             }
+
+            // Check 2: Passiver Ofen-Tick (Falls kein GUI offen ist, prüfen wir den Block vor der Nase des Spielers)
+            if ("crafting".equals(detectedType)) {
+                net.minecraft.world.phys.BlockHitResult lookTarget = (net.minecraft.world.phys.BlockHitResult) serverPlayer.pick(6.0D, 1.0F, false);
+                if (lookTarget.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+                    BlockEntity be = serverPlayer.level().getBlockEntity(lookTarget.getBlockPos());
+                    if (be != null) {
+                        String className = be.getClass().getSimpleName().toLowerCase();
+                        if (className.contains("blastfurnace")) detectedType = "blast_furnace";
+                        else if (className.contains("smoker")) detectedType = "smoker";
+                        else if (className.contains("furnace")) detectedType = "furnace";
+                        else if (className.contains("cookingpot")) detectedType = "cookingpot";
+                        else if (className.contains("skillet")) detectedType = "skillet";
+                    }
+                }
+            }
         }
-        
+
         return itemProduced(stack, player, detectedType);
     }
 

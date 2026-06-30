@@ -34,7 +34,7 @@ public class SmithingResultSlotMixin {
             return;
         }
 
-        // KORREKTUR: Wir nutzen den Accessor, um das geschützte 'player' Feld sicher auszulesen
+        // Wir nutzen den Accessor, um das geschützte 'player' Feld sicher auszulesen
         ItemCombinerMenu combinerMenu = (ItemCombinerMenu) (Object) this;
         Player player = ((ItemCombinerMenuAccessor) combinerMenu).getPlayer();
 
@@ -53,22 +53,13 @@ public class SmithingResultSlotMixin {
                     try {
                         this.itemproductionIsProcessing = true;
 
-                        int count = outputStack.getCount();
-                        String itemName = outputStack.getItem().toString();
-                        String playerName = serverPlayer.getName().getString();
+                        // KORREKTUR 1: Wir reichen den ECHTEN Stack hinein, kein .copy()!
+                        // Die Library erhöht die Anzahl direkt im Objekt, sodass die Vorschau im Schmiedetisch
+                        // sofort die korrekte, bonus-modifizierte Anzahl anzeigt!
+                        // Der Typ "smithing" wird explizit mitgeliefert, damit deine Configs greifen.
+                        ItemProductionLib.itemProduced(outputStack, serverPlayer, "smithing");
 
-                        // Logger befüllen
-                        daripher.itemproduction.util.DebugLogger.logCookingPotStack(playerName, itemName, count, "SERVER_SMITHING_PREVIEW_GENERATED");
-
-                        // Übergibt eine saubere Kopie des Items an die Lib (Boni werden berechnet)
-                        ItemStack modified = ItemProductionLib.itemProduced(outputStack.copy(), serverPlayer);
-
-                        // Setzt die Anzahl basierend auf dem modifizierten Ergebnis-Stack
-                        if (modified != null) {
-                            outputStack.setCount(modified.getCount());
-                        }
-
-                        daripher.itemproduction.util.DebugLogger.logStackLoopEnd();
+                        // KORREKTUR 2: Veraltete Schleifen-Logger-Aufrufe entfernt
                     } catch (Exception e) {
                         org.apache.logging.log4j.LogManager.getLogger("ItemProductionLib")
                                 .warn("[SCHMIEDE-FEHLER] Fehler bei der Verarbeitung im Schmiede-Menü: {}", e.getMessage());

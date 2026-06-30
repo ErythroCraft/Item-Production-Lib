@@ -29,19 +29,9 @@ public final class DebugLogger {
         LOGGER.warn("------------------------------------------------------------");
     }
 
-    public static void logStackLoopStep(int current, int total) {
-        if (Boolean.FALSE.equals(ModConfig.SHOW_STACK_TEST_LOGS.get())) return;
-        LOGGER.warn("[STACK-SCHRITT] Verarbeite Item {} von {} fuer den Skill Tree...", current, total);
-    }
-
-    public static void logStackLoopEnd() {
-        if (Boolean.FALSE.equals(ModConfig.SHOW_STACK_TEST_LOGS.get())) return;
-        LOGGER.warn("============================================================");
-    }
-
     /**
      * Intelligenter, zentraler Logger fuer die Hauptklasse.
-     * FIX: Nutzt jetzt einen übergebenen 'productionType' statt des absturzgefährdeten containerMenu-Objekts!
+     * Nutzt den übergebenen 'productionType' für perfekte Config-Filterung!
      */
     public static void logItemProduction(ItemStack stack, Player player, String crafterName, String productionType) {
         if (player == null || stack == null) return;
@@ -51,7 +41,6 @@ public final class DebugLogger {
         int count = stack.getCount();
         String headerTitle;
 
-        // FIXED java:S1871 & java:S1192: Zusammenfassung der Filterung und Beseitigung von Redundanzen
         switch (productionType.toLowerCase()) {
             case "crafting":
                 if (Boolean.FALSE.equals(ModConfig.ENABLE_CRAFTING_LOGS.get())) return;
@@ -73,19 +62,26 @@ public final class DebugLogger {
                 if (Boolean.FALSE.equals(ModConfig.ENABLE_BREWING_LOGS.get())) return;
                 headerTitle = "============ [ALCHEMIE-BRAUSTAND] ==================";
                 break;
+            case "cookingpot":
+                if (Boolean.FALSE.equals(ModConfig.SHOW_STACK_TEST_LOGS.get())) return;
+                headerTitle = "============ [FARMERS-DELIGHT KOCHTOPF] ============";
+                break;
+            case "skillet":
+                if (Boolean.FALSE.equals(ModConfig.SHOW_STACK_TEST_LOGS.get())) return;
+                headerTitle = "============ [FARMERS-DELIGHT BRATPFANNE] ==========";
+                break;
             default:
                 if (Boolean.FALSE.equals(ModConfig.ENABLE_UNKNOWN_LOGS.get())) return;
-                headerTitle = "============ [ZUSAETZLICHES MOD-MENUE: " + productionType + "] ============";
+                headerTitle = "============ [ZUSAETZLICHES MOD-MENUE: " + productionType.toUpperCase() + "] ============";
                 break;
         }
 
-        // Der eigentliche Log-Vorgang wird zentral nur EINMAL ausgeführt
+        // Der eigentliche Log-Vorgang wird zentral ausgeführt
         LOGGER.warn(headerTitle);
         LOGGER.warn("[INFO] Typ/Klasse: {}", productionType);
-        LOGGER.warn("[INFO] Gegenstand: {} x {}", count, itemName); // <-- HIER GEFIXT
+        LOGGER.warn("[INFO] Gegenstand: {} x {}", count, itemName);
         LOGGER.warn("[INFO] Gecraftet von: {}", crafterName);
         LOGGER.warn("[INFO] Entnommen von: {}", playerName);
         LOGGER.warn(LINE_SEPARATOR);
-
     }
 }

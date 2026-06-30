@@ -3,108 +3,121 @@ package daripher.itemproduction.mixin.farmersdelight;
 import daripher.itemproduction.ItemProductionLib;
 import daripher.itemproduction.block.entity.Interactive;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.Containers;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CampfireCookingRecipe;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.CampfireBlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.Optional;
+import vectorwing.farmersdelight.common.block.SkilletBlock;
 import vectorwing.farmersdelight.common.block.entity.SkilletBlockEntity;
 
 @Mixin(value = SkilletBlockEntity.class, remap = false)
 public abstract class SkilletBlockEntityMixin {
 
     @Shadow
-    public abstract ItemStack getStoredStack();
+    private int cookingTime;
 
-    @Unique
-    private static int itemproductionLastCount = 0;
-
-    @Unique
-    private static ItemStack itemproductionLastItem = ItemStack.EMPTY;
+    @Shadow
+    private int cookingTimeTotal;
 
     /**
-     * Wir klinken uns am ANFANG des Ticks ein, um den aktuellen Inhalt zu sichern.
+     * Klinkt sich am ANFANG von cookAndOutputItems ein.
+     * Nutzt das 1.20.1 Rezept-System über den Container-Fallback, um @Shadow-Fehler komplett zu eliminieren!
      */
-    @Inject(method = "cookingTick", at = @At("HEAD"))
-    private static void onCookingTickHead(Level level, BlockPos pos, BlockState state, SkilletBlockEntity blockEntity, CallbackInfo ci) {
-        if (level == null || level.isClientSide() || blockEntity == null) {
-            return;
-        }
-        ItemStack current = blockEntity.getStoredStack();
-        itemproductionLastCount = current.getCount();
-        itemproductionLastItem = current.copy();
-    }
-
-    /**
-     * Wir klinken uns am ENDE des Ticks ein. 
-     * Wenn das rohe Item zu einem fertigen Item wurde, schlagen wir zu!
-     */
-    @Inject(method = "cookingTick", at = @At("TAIL"))
-    private static void onCookingTickTail(Level level, BlockPos pos, BlockState state, SkilletBlockEntity blockEntity, CallbackInfo ci) {
-        if (level == null || level.isClientSide() || blockEntity == null) {
+    @Inject(method = "cookAndOutputItems", at = @At("HEAD"))
+    private void onSkilletItemCooked(ItemStack cookingStack, Level level, CallbackInfo ci) {
+        if (level == null || level.isClientSide() || cookingStack.isEmpty()) {
             return;
         }
 
-        ItemStack currentStack = blockEntity.getStoredStack();
-        if (currentStack.isEmpty()) {
+        // 1. SICHERUNG: Nur in dem exakten Tick feuern, in dem das Kochen beendet ist!
+        if (this.cookingTime + 1 < this.cookingTimeTotal) {
             return;
         }
 
-        // Logik: Ein Item wurde fertig gebraten, wenn sich das Item im Slot verändert hat 
-        // (z.B. von roh zu gekocht) ODER wenn der Stack an fertigem Essen größer geworden ist!
-        boolean itemChanged = !ItemStack.isSameItem(itemproductionLastItem, currentStack) && !itemproductionLastItem.isEmpty();
-        boolean countIncreased = currentStack.getCount() > itemproductionLastCount;
+        SkilletBlockEntity skillet = (SkilletBlockEntity) (Object) this;
+        ItemStack cookedResult = ItemStack.EMPTY;
 
-        if (itemChanged || countIncreased) {
-            // Sicherstellen, dass es kein rohes Item mehr ist
-            if (currentStack.getItem().isEdible() && !currentStack.getDescriptionId().contains("raw")) {
+        // 2. ABSOLUT FEHLERFREIER 1.20.1 REZEPT-DETEKTOR:
+        // Wir packen das rohe Item in einen virtuellen 1-Slot-Container und fragen Minecrafts 
+        // offizielles Rezeptbuch nach dem passenden Campfire-Ergebnis ab. Das klappt immer!
+        try {
+            SimpleContainer temporaryContainer = new SimpleContainer(cookingStack);
+            Optional<CampfireCookingRecipe> recipe = level.getRecipeManager()
+                    .getRecipeFor(RecipeType.CAMPFIRE_COOKING, temporaryContainer, level);
 
-                // Spieler über das funktionierende Interface holen
-                Player foundPlayer = null;
-                if ((Object) blockEntity instanceof Interactive interactive) {
-                    foundPlayer = interactive.resolveUser(level);
-                }
+            if (recipe.isPresent()) {
+                cookedResult = recipe.get().getResultItem(level.registryAccess());
+            }
+        } catch (Exception ignored) {
+            return; // Wenn die Rezept-Abfrage fehlschlägt, abbrechen um Abstürze zu verhindern
+        }
 
-                ServerPlayer targetPlayer = null;
-                if (foundPlayer instanceof ServerPlayer serverPlayer) {
-                    targetPlayer = serverPlayer;
-                } else {
-                    // Fallback Umkreis
-                    Player closestPlayer = level.getNearestPlayer(pos.getX(), pos.getY(), pos.getZ(), 8.0, false);
-                    if (closestPlayer instanceof ServerPlayer serverPlayer) {
-                        targetPlayer = serverPlayer;
-                    }
-                }
+        if (cookedResult == null || cookedResult.isEmpty()) {
+            return;
+        }
 
-                if (targetPlayer != null) {
-                    // Wir jagen eine 1er-Kopie durch deine funktionierende Library
-                    ItemStack singleCooked = currentStack.copy();
-                    singleCooked.setCount(1);
+        BlockPos pos = skillet.getBlockPos();
 
-                    ItemStack bonusResult = ItemProductionLib.itemProduced(singleCooked, targetPlayer, "skillet");
+        // Spieler ermitteln
+        Player foundPlayer = null;
+        if ((Object) this instanceof Interactive interactive) {
+            foundPlayer = interactive.resolveUser(level);
+        }
 
-                    // Wenn der Skill-Tree die Anzahl erhöht hat (z.B. Ergebnis ist 2 statt 1)
-                    int bonusAmount = bonusResult.getCount() - 1;
-                    if (bonusAmount > 0) {
-                        ItemStack extraDrop = currentStack.copy();
-                        extraDrop.setCount(bonusAmount);
+        ServerPlayer targetPlayer = null;
+        if (foundPlayer instanceof ServerPlayer serverPlayer) {
+            targetPlayer = serverPlayer;
+        } else {
+            Player closestPlayer = level.getNearestPlayer(pos.getX(), pos.getY(), pos.getZ(), 8.0, false);
+            if (closestPlayer instanceof ServerPlayer serverPlayer) {
+                targetPlayer = serverPlayer;
+            }
+        }
 
-                        // Physisch neben der Pfanne spawnen lassen!
-                        Containers.dropItemStack(level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, extraDrop);
+        if (targetPlayer != null) {
+            // Wir jagen eine kontrollierte 1er-Menge des FERTIGEN Essens durch deine Library
+            ItemStack targetStack = cookedResult.copy();
+            targetStack.setCount(1);
+            
+            ItemStack bonusResult = ItemProductionLib.itemProduced(targetStack, targetPlayer, "skillet");
 
-                        org.apache.logging.log4j.LogManager.getLogger("ItemProductionLib")
-                                .info("[PFANNEN-BONUS] {} x extra {} generiert!", bonusAmount, extraDrop.getItem().toString());
-                    }
-                }
+            // Wenn der Skill-Tree zusätzliche Gegenstände generiert hat
+            int bonusAmount = bonusResult.getCount() - 1;
+            if (bonusAmount > 0) {
+                ItemStack extraDrop = bonusResult.copy();
+                extraDrop.setCount(bonusAmount);
+
+                // Blickrichtung für den physikalischen Auswurfeffekt berechnen
+                Direction direction = skillet.getBlockState().getValue(SkilletBlock.FACING).getClockWise();
+                
+                double spawnX = pos.getX() + 0.5 + (direction.getStepX() * 0.2);
+                double spawnY = pos.getY() + 0.3;
+                double spawnZ = pos.getZ() + 0.5 + (direction.getStepZ() * 0.2);
+
+                // Item in der Welt spawnen lassen
+                ItemEntity itemEntity = new ItemEntity(level, spawnX, spawnY, spawnZ, extraDrop);
+                
+                // Schiebt das Item mit dem gleichen Schwung wie das Original von der Pfanne
+                itemEntity.setDeltaMovement(direction.getStepX() * 0.08F, 0.25F, direction.getStepZ() * 0.08F);
+                itemEntity.setPickUpDelay(20); // 1 Sekunde Trichter-Schutz
+
+                level.addFreshEntity(itemEntity);
+
+                org.apache.logging.log4j.LogManager.getLogger("ItemProductionLib")
+                        .warn("[PFANNEN-BONUS] Skill erfolgreich! +{} extra FERTIGES '{}' fuer {} ausgeworfen!", 
+                                bonusAmount, extraDrop.getItem().toString(), targetPlayer.getName().getString());
             }
         }
     }

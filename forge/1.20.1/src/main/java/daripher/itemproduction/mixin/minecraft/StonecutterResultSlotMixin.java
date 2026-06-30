@@ -19,9 +19,8 @@ public class StonecutterResultSlotMixin {
 
     /**
      * 'onTake' wird aufgerufen, wenn der Spieler (oder ein Shift-Klick) das fertige Item 
-     * (z. B. Steinstufen oder bearbeiteten Mod-Stein) erfolgreich aus dem Steinschneider herausnimmt.
+     * erfolgreich aus dem Steinschneider herausnimmt.
      */
-    // In deiner StonecutterResultSlotMixin.java ebenfalls so abändern:
     @Inject(method = "onTake(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/ItemStack;)V", at = @At("HEAD"), remap = true)
     private void onStonecutterItemTaken(Player player, ItemStack stack, CallbackInfo ci) {
         // Nur auf dem Server verarbeiten
@@ -34,18 +33,12 @@ public class StonecutterResultSlotMixin {
         }
 
         try {
-            int count = stack.getCount();
-            String itemName = stack.getItem().toString();
-            String playerName = serverPlayer.getName().getString();
+            // KORREKTUR 1: Wir reichen den ECHTEN Stack hinein, kein .copy()!
+            // Die Library erhöht die Anzahl direkt in dem Gegenstand, den der Spieler gerade anklickt.
+            // Der Typ "stonecutter" wird mitgesendet, damit deine Configs und Logs (Zusatz-Menüs) greifen.
+            ItemProductionLib.itemProduced(stack, serverPlayer, "stonecutter");
 
-            // Logger füttern mit dem echten Steinschneider-Event
-            daripher.itemproduction.util.DebugLogger.logCookingPotStack(playerName, itemName, count, "PLAYER_STONECUTTING_FINISHED");
-
-            // Übergibt eine saubere Kopie des bearbeiteten Items an deine Lib.
-            // Das Item landet komplett tag-frei und perfekt stapelbar im Inventar des Spielers!
-            ItemProductionLib.itemProduced(stack.copy(), serverPlayer);
-
-            daripher.itemproduction.util.DebugLogger.logStackLoopEnd();
+            // KORREKTUR 2: Veraltete Schleifen-Logger-Aufrufe entfernt
         } catch (Exception e) {
             org.apache.logging.log4j.LogManager.getLogger("ItemProductionLib")
                     .warn("[STONECUTTER-FEHLER] Fehler bei der Verarbeitung im Steinschneider-Slot: {}", e.getMessage());

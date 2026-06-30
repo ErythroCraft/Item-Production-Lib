@@ -11,18 +11,24 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable; // KORREKTUR: Import geändert
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-// 1. Klasse direkt importieren
+// Klasse direkt importieren
 import vectorwing.farmersdelight.common.block.entity.CookingPotBlockEntity;
 
-// 2. KORREKTUR: "value" statt "targets" verwenden
 @Mixin(value = CookingPotBlockEntity.class, remap = false)
 public abstract class CookingPotBlockEntityMixin {
 
-    // KORREKTUR: Nutzt CallbackInfoReturnable<Boolean>, da die Originalmethode einen Boolean zurückgibt
+    /**
+     * Injiziert sich am Ende von processCooking, wenn das Essen im Ausgangs-Slot generiert wurde.
+     */
     @Inject(method = "processCooking", at = @At("TAIL"))
     private void onCookingFinished(CallbackInfoReturnable<Boolean> cir) {
+        // Nur verarbeiten, wenn das Kochen in diesem Schritt erfolgreich war (Return-Wert ist true)
+        if (!cir.getReturnValue()) {
+            return;
+        }
+
         net.minecraft.world.level.block.entity.BlockEntity blockEntity = (net.minecraft.world.level.block.entity.BlockEntity) (Object) this;
         Level level = blockEntity.getLevel();
 
@@ -37,7 +43,7 @@ public abstract class CookingPotBlockEntityMixin {
             return;
         }
 
-        // 2. Greife über das neue Interactive-Interface sicher auf den Spieler zu
+        // 2. Greife über das Interactive-Interface sicher auf den Spieler zu
         Player foundPlayer = null;
         if ((Object) this instanceof Interactive interactive) {
             foundPlayer = interactive.resolveUser(level);
@@ -59,17 +65,18 @@ public abstract class CookingPotBlockEntityMixin {
 
         // 3. Wenn ein gültiger Spieler gefunden wurde, führe die Produktion aus
         if (targetPlayer != null) {
-            int count = finishedFood.getCount();
-            String itemName = finishedFood.getItem().toString();
-            String playerName = targetPlayer.getName().getString();
+            // KORREKTUR 1: Typ-Angabe "cookingpot" mitsenden, damit deine Configs und Logs greifen
+            // KORREKTUR 2: Wir übergeben den ECHTEN Stack. Die Library berechnet die Boni 
+            // und erhöht die Anzahl direkt im echten Objekt!
+            ItemProductionLib.itemProduced(finishedFood, targetPlayer, "cookingpot");
 
-            // Logger mit dem neuen Event-Typ füttern
-            daripher.itemproduction.util.DebugLogger.logCookingPotStack(playerName, itemName, count, "SERVER_RECIPE_FINISHED");
+            // KORREKTUR 3: Wir schreiben das Ergebnis direkt physisch in das Inventar des Kochtopfs zurück.
+            // Slot 5 ist bei Farmer's Delight traditionell der Ergebnis-Ausgangs-Slot des Topfes!
+            if (blockEntity instanceof net.minecraft.world.Container container) {
+                container.setItem(5, finishedFood);
+            }
 
-            // Übergibt eine saubere Kopie des Stacks ohne NBT-Tags an deine Hauptbibliothek
-            ItemProductionLib.itemProduced(finishedFood.copy(), targetPlayer);
-
-            daripher.itemproduction.util.DebugLogger.logStackLoopEnd();
+            // KORREKTUR 4: Veralteten logStackLoopEnd-Aufruf entfernt, da er Kompilierfehler verursacht hat
         }
     }
 
